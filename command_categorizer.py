@@ -2,6 +2,9 @@ import os
 import sys
 import argparse
 import bashlex
+import math
+from multiprocessing import Process, Manager
+import pickle
 
 parser = argparse.ArgumentParser(description='Tool to categorize commands run within the android'
          ' build. Use with a version of ninja log that is formatted as follows: \n'
@@ -26,14 +29,16 @@ def command_word(node):
     if node.kind != 'command':
         return ''
     word = ''
+    is_bash = False
     for p in node.parts:
         if p.kind == 'word':
             if p.word == '[':
                 word = p.word
                 continue
             if p.word == '/bin/bash':
+                is_bash = True
                 continue
-            if len(p.word) > 0 and p.word[0] == '-':
+            if is_bash and len(p.word) > 0 and p.word[0] == '-':
                 continue
             word += p.word
             break
@@ -61,7 +66,6 @@ def find_words_in_tree(node):
     return words
 
 def parse_cmd(cmd_map, cmd_tuple, cmd):
-    #print cmd
     parts = bashlex.parse(cmd)
     for part in parts:
         words = find_words_in_tree(part)
@@ -73,21 +77,59 @@ def parse_cmd(cmd_map, cmd_tuple, cmd):
             else:
                 if word not in cmd_map:
                     cmd_map[word] = {}
-                cmd_map[word][cmd_tuple[0]] = cmd_tuple[1:]
+                key = (cmd_tuple[0],cmd_tuple[1])
+                if key not in cmd_map[word]:
+                    cmd_map[word][key] = []
+                cmd_map[word][key].append(cmd_tuple[2])
                 done_cmds.add(cmd_tuple)
+
+def process(start, end):
+    cmds = load_commands(args.log_file)
+    cmds = sanitize_commands(cmds)
+    cmds = cmds[start:end]
+    cmd_map = {}
+    for idx, c in enumerate(cmds):
+        try:
+            parse_cmd(cmd_map, c, c[0])
+            if c not in done_cmds:
+                print 'Missing'
+                exit()
+        except Exception as e:
+            print 'Failed to parse command due to %s, adding as is' % e
+            key = (c[0],c[1])
+            cmd_map[c[0]] = {key: [c[2]]}
+    pickle.dump(cmd_map, open( 'categories_%i_%i.pkl' % (start, end), 'wb'))
 
 done_cmds = set()
 cmds = load_commands(args.log_file)
 cmds = sanitize_commands(cmds)
 cmd_map = {}
-for idx, c in enumerate(cmds[94555:110000]):
-    print (idx, len(cmd_map), [k for k in cmd_map][:5])
-    try:
-        parse_cmd(cmd_map, c, c[0])
-        if c not in done_cmds:
-            print 'Missing'
-            exit()
-    except Exception as e:
-        print e
+threads = []
+cpu_count = 64.0
+share = int(math.ceil(len(cmds)/cpu_count/100)*100)
 
+manager = Manager()
+for i in range(int(cpu_count)):
+    start,end = i*share,(i+1)*share
+    print start, end
+    p = Process(target=process, args=(start, end))
+    p.start()
+    threads.append((p,start,end))
+    continue
+    thread = Processor(cmds[start:end])
+    thread.start()
+    threads.append(thread)
+
+for p,_,_ in threads:
+    p.join()
+
+for _,start,end in threads:
+    sub_cmd_map = pickle.load( open( 'categories_%i_%i.pkl' % (start,end), 'rb' ) )
+    for k in sub_cmd_map:
+        if k in cmd_map:
+            cmd_map[k].update(sub_cmd_map[k])
+        else:
+            cmd_map[k] = sub_cmd_map[k]
+for k in cmd_map:
+    print k
 print len(cmd_map)
