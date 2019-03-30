@@ -130,6 +130,19 @@ for _,start,end in threads:
             cmd_map[k].update(sub_cmd_map[k])
         else:
             cmd_map[k] = sub_cmd_map[k]
-for k in cmd_map:
-    print k
-print len(cmd_map)
+
+cmd_combos = {}
+for c in cmds:
+    key = (c[0],c[1])
+    bins = set()
+    for k in cmd_map:
+        if key in cmd_map[k]:
+            bins.add(k)
+    bins = ";".join(sorted(list(bins)))
+    if bins not in cmd_combos:
+        cmd_combos[bins] = {}
+    if key not in cmd_combos[bins]:
+        cmd_combos[bins][key] = []
+    cmd_combos[bins][key].append(c[2])
+
+print len(cmd_combos)
