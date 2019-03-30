@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description='Tool to categorize commands run wi
          'start\\tend\\ttimestamp\\toutput\\tcommand')
 
 parser.add_argument('log_file', help='ninja log file to categorize.')
+parser.add_argument('--skip_processing', help='set to load preprocessed pkl files.', action="store_true")
 args = parser.parse_args()
 
 def load_commands(path):
@@ -100,30 +101,36 @@ def process(start, end):
             cmd_map[c[0]] = {key: [c[2]]}
     pickle.dump(cmd_map, open( 'categories_%i_%i.pkl' % (start, end), 'wb'))
 
+def fork(parts):
+    manager = Manager()
+    processes = []
+    for start,end in parts:
+        print start, end
+        p = Process(target=process, args=(start, end))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+
+def split_work(cmds):
+    cpu_count = 64.0
+    share = int(math.ceil(len(cmds)/cpu_count/100)*100)
+    parts = []
+    for i in range(int(cpu_count)):
+        start,end = i*share,(i+1)*share
+        parts.append((start,end))
+    return parts
+
 done_cmds = set()
 cmds = load_commands(args.log_file)
 cmds = sanitize_commands(cmds)
 cmd_map = {}
 threads = []
-cpu_count = 64.0
-share = int(math.ceil(len(cmds)/cpu_count/100)*100)
+parts = split_work(cmds)
+if not args.skip_processing:
+    fork(parts)
 
-manager = Manager()
-for i in range(int(cpu_count)):
-    start,end = i*share,(i+1)*share
-    print start, end
-    p = Process(target=process, args=(start, end))
-    p.start()
-    threads.append((p,start,end))
-    continue
-    thread = Processor(cmds[start:end])
-    thread.start()
-    threads.append(thread)
-
-for p,_,_ in threads:
-    p.join()
-
-for _,start,end in threads:
+for start,end in parts:
     sub_cmd_map = pickle.load( open( 'categories_%i_%i.pkl' % (start,end), 'rb' ) )
     for k in sub_cmd_map:
         if k in cmd_map:
@@ -146,3 +153,7 @@ for c in cmds:
     cmd_combos[bins][key].append(c[2])
 
 print len(cmd_combos)
+for bins in cmd_combos:
+    keys = cmd_combos[bins].keys()
+    durs = [k[1] for k in keys]
+    print (bins,len(durs),max(durs),sum(durs)/float(len(durs)))
