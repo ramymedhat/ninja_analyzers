@@ -152,7 +152,6 @@ for c in cmds:
         cmd_combos[bins][key] = []
     cmd_combos[bins][key].append(c[2])
 
-print len(cmd_combos)
 for bins in cmd_combos:
     keys = cmd_combos[bins].keys()
     durs = [k[1] for k in keys]
