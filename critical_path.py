@@ -23,8 +23,14 @@ def load_commands(path):
     lines = f.readlines()
     lines = [l for l in lines if len(l) > 0 and l[0] != '#']
     cmds = [l.split('\t') for l in lines]
-    cmds = [(" ".join(c[5:]), int(c[1]) - int(c[0]), c[3]) for c in cmds]
-    return cmds
+    newcmds = []
+    for c in cmds:
+      try:
+        newcmds.append((" ".join(c[5:]), int(c[1]) - int(c[0]), c[3]))
+      except Exception as e:
+        print(c)
+        raise e
+    return newcmds
 
 def load_graph(path):
     lines = open(path, 'r').readlines()
@@ -39,7 +45,7 @@ def load_graph(path):
             nodes[res.group(1)] = res.group(2)
             roots[res.group(1)] = res.group(2)
             leaves[res.group(1)] = res.group(2)
-            #print 'node %s[%s] (%d)' % (res.group(1), res.group(2), len(nodes))
+            # print('node %s[%s] (%d)' % (res.group(1), res.group(2), len(nodes)))
     for line in lines:
         res = re.search(re_edge, line)
         if res != None:
@@ -73,7 +79,7 @@ def map_cmds_to_graph(nodes, cmds):
     return node_cmds
 
 nodes, roots, leaves, edges = load_graph(args.graph_file)
-print len(nodes), len(roots), len(leaves), sum([len(edges[k]) for k in edges])
+# print(len(nodes), len(roots), len(leaves), sum([len(edges[k]) for k in edges]))
 cmds = load_commands(args.log_file)
 node_cmds = map_cmds_to_graph(nodes, cmds)
 
@@ -103,13 +109,11 @@ max_dur = 0
 max_path = []
 idx = 0
 for node in roots:
-    if idx % 5000 == 0:
-        print (idx, len(roots))
     idx += 1
     dur,path = cpath(edges, node_cmds, node)
     if dur > max_dur:
         max_dur, max_path = dur, path
-print max_dur
+print(max_dur)
+max_path.sort(key=lambda x: node_cmds[x][1] if x in node_cmds else 0)
 for node in max_path:
-    print 'Dur: %d' % (node_cmds[node][1] if node in node_cmds else 0)
-    print 'Cmd(target): %s' % (node_cmds[node][0].strip() if node in node_cmds else nodes[node])
+    print('Dur: %d, Cmd(target): %s' % (node_cmds[node][1] if node in node_cmds else 0, node_cmds[node][0].strip() if node in node_cmds else nodes[node]))

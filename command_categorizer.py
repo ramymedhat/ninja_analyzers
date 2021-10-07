@@ -93,10 +93,10 @@ def process(start, end):
         try:
             parse_cmd(cmd_map, c, c[0])
             if c not in done_cmds:
-                print 'Missing'
+                print('Missing')
                 exit()
         except Exception as e:
-            print 'Failed to parse command due to %s, adding as is' % e
+            print('Failed to parse command due to %s, adding as is' % e)
             key = (c[0],c[1])
             cmd_map[c[0]] = {key: [c[2]]}
     pickle.dump(cmd_map, open( 'categories_%i_%i.pkl' % (start, end), 'wb'))
@@ -105,7 +105,7 @@ def fork(parts):
     manager = Manager()
     processes = []
     for start,end in parts:
-        print start, end
+        print(start, end)
         p = Process(target=process, args=(start, end))
         p.start()
         processes.append(p)
